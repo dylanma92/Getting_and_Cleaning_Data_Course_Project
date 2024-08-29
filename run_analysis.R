@@ -1,68 +1,57 @@
-library(tidyverse)
+# this function creates data frames for subject and activity text files
 
-# read text files and assign to objects
+subject_or_activity <- function(file) {
+    
+    header <- str_extract(file, "(?<=/)[:alpha:]+(?=_[:alpha:]+.txt$)")
+    
+    if (header == "y") {
+        readr::read_lines(file) %>%
+            tibble() %>%
+            mutate_if(is.character, as.numeric) %>%
+            rename_with(.cols = 1, ~ "activity")
+    }
+    
+    else {
+        readr::read_lines(file) %>%
+            tibble() %>%
+            mutate_if(is.character, as.numeric) %>%
+            rename_with(.cols = 1, ~ header)
+    }
+    
+}
 
-X_train <- readr::read_lines("./UCI HAR Dataset/train/X_train.txt")
-y_train <- readr::read_lines("./UCI HAR Dataset/train/y_train.txt")
-subject_train <- readr::read_lines("./UCI HAR Dataset/train/subject_train.txt")
-X_test <- readr::read_lines("./UCI HAR Dataset/test/X_test.txt")
-y_test <- readr::read_lines("./UCI HAR Dataset/test/y_test.txt")
-subject_test <- readr::read_lines("./UCI HAR Dataset/test/subject_test.txt")
+# this function creates data frames for training and test measurement text files
 
-train <- tibble(subject_train,
-                y_train,
-                X_train) %>% # build a data frame of "train" values
-  rename(subject = subject_train,
-         activity_label = y_train) %>%
-  separate_wider_delim(X_train,
-                       delim = " ",
-                       names_sep = "_",
-                       too_few = "align_start") %>% # separate string in "X_train" column and split into multiple new columns
-  mutate_if(is.character,
-            as.numeric) %>%
-  rowwise() %>%
-  mutate(measurement_mean = mean(c_across(starts_with("X_train")), 
-                                 na.rm = TRUE), 
-         measurement_sd = sd(c_across(starts_with("X_train")), 
-                             na.rm = TRUE)) %>% # calculate the mean and sd of columns starting with "X_train"
-  select(subject, 
-         activity_label, 
-         measurement_mean, 
-         measurement_sd)
+train_or_test <- function(file) {
+    
+    header_1 <- paste(str_extract(file, "(?<=/)([:alpha:]+_){2}[:alpha:](?=_[:alpha:]+.txt$)"), "mean", sep = "_")
+    header_2 <- paste(str_extract(file, "(?<=/)([:alpha:]+_){2}[:alpha:](?=_[:alpha:]+.txt$)"), "sd", sep = "_")
+    
+    readr::read_lines(file) %>%
+        tibble() %>%
+        separate_wider_delim(".", delim = " ", names_sep = "_", too_few = "align_start") %>%
+        mutate_if(is.character, as.numeric) %>%
+        rowwise() %>%
+        mutate(mean = mean(c_across(starts_with("._")), na.rm = TRUE), sd = sd(c_across(starts_with("._")), na.rm = TRUE)) %>%
+        select(mean, sd) %>%
+        rename_with(.cols = c(1, 2), ~ c(header_1, header_2))
+}
 
-test <- tibble(subject_test,
-               y_test,
-               X_test) %>% # build a data frame of "test" values
-  rename(subject = subject_test,
-         activity_label = y_test) %>%
-  separate_wider_delim(X_test,
-                       delim = " ",
-                       names_sep = "_",
-                       too_few = "align_start") %>% # separate string in "X_test" column and split into multiple new columns
-  mutate_if(is.character,
-            as.numeric) %>%
-  rowwise() %>%
-  mutate(measurement_mean = mean(c_across(starts_with("X_test")), 
-                                 na.rm = TRUE), 
-         measurement_sd = sd(c_across(starts_with("X_test")), 
-                             na.rm = TRUE)) %>% # calculate the mean and sd of columns starting with "X_test"
-  select(subject, 
-         activity_label, 
-         measurement_mean, 
-         measurement_sd)
+# use cbind to join the training and test measurement data frames
 
-combined_data <- bind_rows(train, test) %>% # combine the rows of data frames "train" and "test"
-  mutate(activity = case_when(activity_label == 1 ~ "walking",
-                              activity_label == 2 ~ "walking_upstairs",
-                              activity_label == 3 ~ "walking_downstairs",
-                              activity_label == 4 ~ "sitting",
-                              activity_label == 5 ~ "standing",
-                              activity_label == 6 ~ "laying"), 
-         .before = activity_label) %>% # create a new column "activity" using the values in "activity_label" 
-  select(!(activity_label)) # select all columns except "activity_label
+# this function binds the rows of training and test measurement data frames, label activities, group rows, summarize means, and generate the csv file output
 
-combined_data_grouped <- combined_data %>% group_by(subject, activity) %>%
-  summarise(activity_mean = mean(measurement_mean, na.rm = TRUE), .groups = "keep") # group rows by "subject" and "activity" then calculate the mean of "measurement_mean"
-
-write_csv(combined_data, file = "combined_data.csv") # write "combined_data" as a csv file
-write_csv(combined_data_grouped, file = "combined_data_grouped.csv") # write "combined_data_grouped" as a csv file
+combine_and_process <- function(training_df, test_df) {
+    bind_rows(training_df, test_df) %>%
+        mutate(activity_label = case_when(activity == 1 ~ "walking",
+                                      activity == 2 ~ "walking_upstairs",
+                                      activity == 3 ~ "walking_downstairs",
+                                      activity == 4 ~ "sitting",
+                                      activity == 5 ~ "standing",
+                                      activity == 6 ~ "laying"),
+           .before = activity) %>%
+        select(!(activity)) %>%
+        group_by(subject, activity_label) %>%
+        summarise(across(ends_with("mean"), mean, .groups = "keep")) %>%
+        write_csv(file = "combined_data.csv")
+}
