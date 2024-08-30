@@ -50,4 +50,4 @@ combined_df <- combined_df %>% group_by(subject, activity) %>%
 
 # write the tidy data to a text file
 
-write.table(combined_df, file = "tidy_data.text", row.names = FALSE)
+write.table(combined_df, file = "tidy_data.txt", row.names = FALSE)
