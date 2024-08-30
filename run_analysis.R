@@ -43,15 +43,24 @@ train_or_test <- function(file) {
 
 combine_and_process <- function(training_df, test_df) {
     bind_rows(training_df, test_df) %>%
-        mutate(activity_label = case_when(activity == 1 ~ "walking",
-                                      activity == 2 ~ "walking_upstairs",
-                                      activity == 3 ~ "walking_downstairs",
-                                      activity == 4 ~ "sitting",
-                                      activity == 5 ~ "standing",
-                                      activity == 6 ~ "laying"),
+        mutate(activities = case_when(activity == 1 ~ "walking",
+                                    activity == 2 ~ "walking upstairs",
+                                    activity == 3 ~ "walking downstairs",
+                                    activity == 4 ~ "sitting",
+                                    activity == 5 ~ "standing",
+                                    activity == 6 ~ "laying"),
            .before = activity) %>%
         select(!(activity)) %>%
-        group_by(subject, activity_label) %>%
+        group_by(subject, activities) %>%
         summarise(across(ends_with("mean"), mean, .groups = "keep")) %>%
+        rename("Mean of body acceleration (x axis)" = body_acc_x_mean,
+               "Mean of body acceleration (y axis)" = body_acc_y_mean,
+               "Mean of body acceleration (z axis)" = body_acc_z_mean,
+               "Mean of angular velocity (x axis)" = body_gyro_x_mean,
+               "Mean of angular velocity (y axis)" = body_gyro_y_mean,
+               "Mean of angular velocity (z axis)" = body_gyro_z_mean,
+               "Mean of total acceleration (x axis)" = total_acc_x_mean,
+               "Mean of total acceleration (y axis)" = total_acc_y_mean,
+               "Mean of total acceleration (z axis)" = total_acc_z_mean) %>%
         write_csv(file = "combined_data.csv")
 }
